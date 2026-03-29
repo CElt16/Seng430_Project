@@ -95,7 +95,8 @@ const getFeatureNames = (schema) => {
 ═══════════════════════════════════════════════════════════════ */
 const KNNViz = React.memo(({ params, datasetSchema, targetColumn, primaryStr, secondaryStr }) => {
     const canvasRef = useRef(null);
-    const k = params.knn.k;
+    // Limit K to max 20 since we have exactly 20 mock points
+    const k = Math.min(params.knn.k, 20);
     const fNames = getFeatureNames(datasetSchema);
     const tName = targetColumn || 'Outcome';
 
@@ -771,7 +772,7 @@ const LRViz = React.memo(({ params, datasetSchema, targetColumn, primaryStr, sec
 /* ═══════════════════════════════════════════════════════════════
    6. Naive Bayes — Feature Probability Bars (HTML)
 ═══════════════════════════════════════════════════════════════ */
-const NBViz = React.memo(({ params, datasetSchema, targetColumn, primaryStr, secondaryStr }) => {
+const NBViz = React.memo(({ datasetSchema, targetColumn, primaryStr, secondaryStr }) => {
     const fNames = getFeatureNames(datasetSchema);
     const tName = targetColumn || 'Outcome';
     
