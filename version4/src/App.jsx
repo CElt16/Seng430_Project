@@ -70,17 +70,10 @@ const pageVariants = {
 };
 const pageTransition = { duration: 0.45, ease: [0.4, 0, 0.2, 1] };
 
-// ─── localStorage helpers ──────────────────────────────────────
+// ─── localStorage helpers (Disabled) ───────────────────────────
 const LS_KEY = 'healthai_progress';
-const loadProgress = () => {
-  try {
-    const saved = localStorage.getItem(LS_KEY);
-    return saved ? JSON.parse(saved) : null;
-  } catch { return null; }
-};
-const saveProgress = (data) => {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch { /* empty */ }
-};
+const loadProgress = () => null; // Always start fresh
+const saveProgress = (data) => {}; // Do not save state
 
 function App() {
   // M7: lazy initializer — localStorage is only read once on mount
