@@ -18,7 +18,8 @@ const PORT = process.env.PORT || 3001;
 const ALLOWED_ORIGINS = [
     process.env.ALLOWED_ORIGIN,          // Set in render.yaml env vars
     'http://localhost:5173',             // Vite dev
-    'http://localhost:4173',             // Vite preview
+    'http://localhost:4173',
+    'https://seng430-project-5kbd.onrender.com'
 ].filter(Boolean);
 
 app.use(cors({
