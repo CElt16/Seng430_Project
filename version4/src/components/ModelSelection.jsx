@@ -90,8 +90,8 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
     const [comparisonList, setComparisonList] = useState([]);
     const [lastResult, setLastResult] = useState(null);
     const [trainingError, setTrainingError] = useState(null);
-    const [autoRetrainBanner, setAutoRetrainBanner] = useState(false);
-    const autoRetrainBannerTimer = useRef(null);
+    const [trainStatus, setTrainStatus] = useState('idle'); // 'idle' | 'training' | 'done'
+    const trainStatusTimer = useRef(null);
 
     // H4: ref to cancel in-flight fetch requests
     const abortRef = useRef(null);
@@ -195,19 +195,20 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
     // M3: trainModel is now stable (useCallback), so it's safe in deps
     useEffect(() => {
         if (autoRetrain) {
+            setTrainStatus('training');
             const timer = setTimeout(() => {
-                trainModel();
-                // Show auto-retrain banner for 2s
-                setAutoRetrainBanner(true);
-                clearTimeout(autoRetrainBannerTimer.current);
-                autoRetrainBannerTimer.current = setTimeout(() => setAutoRetrainBanner(false), 2000);
-            }, 300);
-            return () => clearTimeout(timer);
+                trainModel().then(() => {
+                    setTrainStatus('done');
+                    clearTimeout(trainStatusTimer.current);
+                    trainStatusTimer.current = setTimeout(() => setTrainStatus('idle'), 2500);
+                });
+            }, 400);
+            return () => { clearTimeout(timer); };
         }
     }, [params, selectedModel, autoRetrain, trainModel]);
 
-    // Cleanup auto-retrain banner timer
-    useEffect(() => () => clearTimeout(autoRetrainBannerTimer.current), []);
+    // Cleanup train status timer
+    useEffect(() => () => clearTimeout(trainStatusTimer.current), []);
 
     const addToComparison = () => {
         if (lastResult) {
@@ -301,30 +302,14 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
 
             {/* ── Dataset size warning (C3) ── */}
             {dataset && dataset.length > 8000 && (
-                <div className={`p-3 rounded-xl border flex items-start gap-3 text-sm ${
-                    isDarkMode ? 'bg-amber-900/20 border-amber-800/50 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
-                }`}>
+                <div className={`p-3 rounded-xl border flex items-start gap-3 text-sm ${isDarkMode ? 'bg-amber-900/20 border-amber-800/50 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
+                    }`}>
                     <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                     <span><b>Large dataset ({dataset.length.toLocaleString()} rows):</b> Training may be slower. The server supports up to 10,000 rows.</span>
                 </div>
             )}
 
-            {/* ── Auto-Retrain Banner ── */}
-            <AnimatePresence>
-                {autoRetrainBanner && autoRetrain && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        className={`p-3 rounded-xl border flex items-center gap-3 text-sm ${isDarkMode
-                            ? 'bg-emerald-900/20 border-emerald-800/50 text-emerald-300'
-                            : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
-                    >
-                        <Zap className="w-4 h-4 flex-shrink-0" style={{ color: secondaryStr }} />
-                        <span><b>Auto-retrain triggered</b> — model is re-training with updated parameters (debounce: 300 ms)</span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* ── Auto-Retrain Status (inline, non-intrusive) ── */}
 
             {/* ── Backend Error Banner ── */}
             {trainingError && (
@@ -638,9 +623,50 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
                             <h3 className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                                 {VIZ_CONTENT[selectedModel]?.title || 'Visualization'}
                             </h3>
-                            {isTraining && (
-                                <span className={`text-xs font-mono animate-pulse px-2 py-1 rounded`} style={{ color: secondaryStr, backgroundColor: `${secondaryStr}33` }}>Training...</span>
-                            )}
+                            <div className="relative w-[110px] h-[26px]">
+                                <AnimatePresence>
+                                    {isTraining ? (
+                                        <motion.div
+                                            key="training"
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="absolute inset-0 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-full"
+                                            style={{ color: secondaryStr, backgroundColor: `${secondaryStr}20` }}
+                                        >
+                                            <span className="w-1.5 h-1.5 rounded-full animate-pulse inline-block" style={{ backgroundColor: secondaryStr }} />
+                                            Training…
+                                        </motion.div>
+                                    ) : trainStatus === 'done' ? (
+                                        <motion.div
+                                            key="done"
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="absolute inset-0 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-full"
+                                            style={{ color: secondaryStr, backgroundColor: `${secondaryStr}15` }}
+                                        >
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            Updated
+                                        </motion.div>
+                                    ) : autoRetrain ? (
+                                        <motion.div
+                                            key="ready"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.3 }}
+                                            className={`absolute inset-0 flex items-center justify-center text-xs rounded-full font-medium ${
+                                                isDarkMode ? 'text-slate-500 bg-slate-800' : 'text-slate-400 bg-slate-100'
+                                            }`}
+                                        >
+                                            Auto-train on
+                                        </motion.div>
+                                    ) : null}
+                                </AnimatePresence>
+                            </div>
                         </div>
                         <div className="p-5">
                             <AnimatePresence mode="wait">
@@ -651,10 +677,10 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
                                     exit={{ opacity: 0 }}
                                     transition={{ duration: 0.3 }}
                                 >
-                                    <ModelVisualizer 
-                                        selectedModel={selectedModel} 
-                                        params={params} 
-                                        isDarkMode={isDarkMode} 
+                                    <ModelVisualizer
+                                        selectedModel={selectedModel}
+                                        params={params}
+                                        isDarkMode={isDarkMode}
                                         datasetSchema={datasetSchema}
                                         targetColumn={targetColumn}
                                         domain={domain}
@@ -676,7 +702,7 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${isDarkMode
                                             ? 'text-slate-500 hover:text-red-400 hover:bg-red-900/20'
                                             : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
-                                        }`}
+                                            }`}
                                     >
                                         <Trash2 className="w-3 h-3" /> Clear All
                                     </button>
@@ -687,7 +713,7 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${(!lastResult || isTraining || comparisonList.some(r => r.modelName === lastResult?.modelName && r.settings === lastResult?.settings))
                                         ? isDarkMode ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                         : 'text-white shadow-md hover:scale-105 active:scale-95'
-                                    }`}
+                                        }`}
                                     style={(!lastResult || isTraining || comparisonList.some(r => r.modelName === lastResult?.modelName && r.settings === lastResult?.settings)) ? {} : { backgroundColor: primaryStr, boxShadow: `0 2px 8px ${primaryStr}40` }}
                                 >
                                     <Plus className="w-3.5 h-3.5" /> Compare
@@ -712,15 +738,15 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
                                         const sensVal = parseFloat(res.sensitivity);
                                         const sensColor = sensVal >= 0.80 ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600')
                                             : sensVal >= 0.60 ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-                                            : (isDarkMode ? 'text-rose-400' : 'text-rose-600');
+                                                : (isDarkMode ? 'text-rose-400' : 'text-rose-600');
                                         const sensBg = sensVal >= 0.80 ? (isDarkMode ? 'bg-emerald-900/20' : 'bg-emerald-50')
                                             : sensVal >= 0.60 ? (isDarkMode ? 'bg-amber-900/20' : 'bg-amber-50')
-                                            : (isDarkMode ? 'bg-rose-900/20' : 'bg-rose-50');
+                                                : (isDarkMode ? 'bg-rose-900/20' : 'bg-rose-50');
                                         const metricColor = (v) => {
                                             const val = parseFloat(v);
                                             return val >= 0.80 ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600')
                                                 : val >= 0.60 ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-                                                : (isDarkMode ? 'text-rose-400' : 'text-rose-600');
+                                                    : (isDarkMode ? 'text-rose-400' : 'text-rose-600');
                                         };
                                         return (
                                             <tr key={res.id} className={`${isDarkMode ? 'hover:bg-slate-800/80' : 'hover:bg-slate-50/80'} transition-colors`}>
@@ -826,10 +852,10 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
                                                 <div className="absolute inset-0 flex items-center gap-3 pointer-events-none px-0">
                                                     {/* Matches label width */}
                                                     <div className="w-[80px] sm:w-[120px] shrink-0" />
-                                                    
+
                                                     {/* Matches bar area width */}
                                                     <div className="flex-1 h-full relative">
-                                                        <div 
+                                                        <div
                                                             className={`absolute top-0 bottom-0 w-[2px] ${isDarkMode ? 'bg-red-500/50' : 'bg-red-500/40'} border-l border-white/10`}
                                                             style={{ left: `${thresholds[metric] * 100}%` }}
                                                         >
@@ -840,7 +866,7 @@ const ModelSelection = ({ isDarkMode, onNext, onPrev, dataset, datasetSchema, ta
                                                             <div className="absolute bottom-0 -translate-x-[40%] w-1.5 h-1.5 rounded-full bg-red-500/40" />
                                                         </div>
                                                     </div>
-                                                    
+
                                                     {/* Matches percentage width */}
                                                     <div className="w-10" />
                                                 </div>
